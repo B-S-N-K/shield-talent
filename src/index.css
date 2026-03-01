@@ -1,0 +1,40 @@
+@import url('https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700;800&family=Inter:wght@300;400;500;600;700&display=swap');
+@import "tailwindcss";
+
+@theme {
+  --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
+  --font-heading: "Barlow Condensed", ui-sans-serif, system-ui, sans-serif;
+  
+  --color-shield-black: #0B1120;
+  --color-shield-black2: #151E32;
+  --color-shield-gray-dark: #1E293B;
+  --color-shield-gray-mid: #334155;
+  --color-shield-gray-line: #1E293B;
+  --color-shield-silver: #94A3B8;
+  --color-shield-silver-lt: #CBD5E1;
+  --color-shield-off-white: #F8FAFC;
+  --color-shield-navy: #0F172A;
+  --color-shield-navy-mid: #1E3A8A;
+  --color-shield-navy-lt: #1D4ED8;
+  --color-shield-bg-light: #F1F5F9;
+  --color-shield-card-bg: #FFFFFF;
+  --color-shield-border-l: #E2E8F0;
+  --color-shield-text-l: #0F172A;
+  --color-shield-text-lm: #475569;
+  --color-shield-accent: #38BDF8;
+}
+
+body {
+  @apply bg-shield-bg-light text-shield-text-l font-sans antialiased;
+}
+
+/* Custom Scrollbar */
+::-webkit-scrollbar {
+  width: 8px;
+}
+::-webkit-scrollbar-track {
+  @apply bg-shield-bg-light;
+}
+::-webkit-scrollbar-thumb {
+  @apply bg-shield-silver rounded-full hover:bg-shield-text-lm;
+}
