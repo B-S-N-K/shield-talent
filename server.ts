@@ -2,13 +2,16 @@ import express from "express";
 import { createServer as createViteServer } from "vite";
 import path from "path";
 import { fileURLToPath } from "url";
-import db from "./src/db";
+import dotenv from "dotenv";
+import { getSupabaseAdminClient, getSupabaseClient } from "./src/lib/supabase";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
+dotenv.config();
+
 async function startServer() {
   const app = express();
-  const PORT = process.env.PORT || 3000;;
+  const PORT = Number(process.env.PORT) || 3000;
 
   // Middleware to parse JSON bodies
   app.use(express.json());
@@ -18,75 +21,159 @@ async function startServer() {
     res.json({ status: "ok" });
   });
 
-  app.get("/api/jobs", (req, res) => {
+  app.get("/api/jobs", async (req, res) => {
     try {
-      const jobs = db.prepare('SELECT * FROM jobs ORDER BY featured DESC, posted_at DESC').all();
-      // Parse tags from JSON string
-      const jobsWithTags = jobs.map((job: any) => {
-        const date = new Date(job.posted_at);
-        const euDate = `${date.getDate().toString().padStart(2, '0')}.${(date.getMonth() + 1).toString().padStart(2, '0')}.${date.getFullYear()}`;
-        
+      const supabase = getSupabaseClient();
+
+      const { data, error } = await supabase
+        .from("jobs")
+        .select("*")
+        .eq("is_active", true)
+        .order("featured", { ascending: false })
+        .order("posted_at", { ascending: false });
+
+      if (error) {
+        throw error;
+      }
+
+      const jobsWithTags = (data ?? []).map((job: any) => {
+        const date = job.posted_at ? new Date(job.posted_at as string) : null;
+        const postedAt = date
+          ? `${date.getDate().toString().padStart(2, "0")}.${(date.getMonth() + 1)
+              .toString()
+              .padStart(2, "0")}.${date.getFullYear()}`
+          : "";
+
         return {
           ...job,
-          tags: JSON.parse(job.tags || '[]'),
-          postedAt: euDate
+          tags: job.tags ?? [],
+          postedAt,
         };
       });
+
       res.json(jobsWithTags);
     } catch (error) {
-      console.error("Database error:", error);
+      console.error("Supabase error:", error);
       res.status(500).json({ error: "Failed to fetch jobs" });
     }
   });
 
-  app.post("/api/jobs", (req, res) => {
+  app.post("/api/jobs", async (req, res) => {
     try {
-      const { title, company, location, type, salary, description, tags, featured } = req.body;
-      const stmt = db.prepare(`
-        INSERT INTO jobs (title, company, location, type, salary, description, tags, featured)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-      `);
-      const result = stmt.run(title, company, location, type, salary, description, JSON.stringify(tags), featured ? 1 : 0);
-      res.json({ id: result.lastInsertRowid, success: true });
+      const {
+        title,
+        company,
+        location,
+        type,
+        salary,
+        description,
+        tags,
+        featured,
+        isActive,
+        expiresAt,
+      } = req.body;
+
+      const supabaseAdmin = getSupabaseAdminClient();
+
+      const { data, error } = await supabaseAdmin
+        .from("jobs")
+        .insert({
+          title,
+          company,
+          location,
+          type,
+          salary,
+          description,
+          tags: tags ?? [],
+          featured: !!featured,
+          is_active: typeof isActive === "boolean" ? isActive : true,
+          expires_at: expiresAt ?? null,
+        })
+        .select("id")
+        .single();
+
+      if (error) {
+        throw error;
+      }
+
+      res.json({ id: data?.id, success: true });
     } catch (error) {
-      console.error("Database error:", error);
+      console.error("Supabase error:", error);
       res.status(500).json({ error: "Failed to create job" });
     }
   });
 
-  app.get("/api/jobs/:id", (req, res) => {
+  app.get("/api/jobs/:id", async (req, res) => {
     try {
-      const job = db.prepare('SELECT * FROM jobs WHERE id = ?').get(req.params.id);
-      if (job) {
-        // @ts-ignore
-        job.tags = JSON.parse(job.tags || '[]');
-        
-        // @ts-ignore
-        const date = new Date(job.posted_at);
-        // @ts-ignore
-        job.postedAt = `${date.getDate().toString().padStart(2, '0')}.${(date.getMonth() + 1).toString().padStart(2, '0')}.${date.getFullYear()}`;
-        
-        res.json(job);
-      } else {
-        res.status(404).json({ error: "Job not found" });
+      const jobId = Number(req.params.id);
+      const supabaseAdmin = getSupabaseAdminClient();
+
+      const { data, error } = await supabaseAdmin
+        .from("jobs")
+        .select("*")
+        .eq("id", jobId)
+        .maybeSingle();
+
+      if (error) {
+        throw error;
       }
+
+      if (!data) {
+        res.status(404).json({ error: "Job not found" });
+        return;
+      }
+
+      const date = data.posted_at ? new Date(data.posted_at as string) : null;
+      const postedAt = date
+        ? `${date.getDate().toString().padStart(2, "0")}.${(date.getMonth() + 1)
+            .toString()
+            .padStart(2, "0")}.${date.getFullYear()}`
+        : "";
+
+      res.json({
+        ...data,
+        tags: data.tags ?? [],
+        postedAt,
+      });
     } catch (error) {
-      console.error("Database error:", error);
+      console.error("Supabase error:", error);
       res.status(500).json({ error: "Failed to fetch job" });
     }
   });
 
-  app.post("/api/applications", (req, res) => {
+  app.post("/api/applications", async (req, res) => {
     try {
-      const { jobId, name, email, message, cvUrl } = req.body;
-      const stmt = db.prepare(`
-        INSERT INTO applications (job_id, name, email, message, cv_url)
-        VALUES (?, ?, ?, ?, ?)
-      `);
-      stmt.run(jobId, name, email, message, cvUrl);
+      const {
+        jobId,
+        name,
+        email,
+        phone,
+        message,
+        cvUrl,
+        gdprConsent,
+        status,
+      } = req.body;
+
+      const supabaseAdmin = getSupabaseAdminClient();
+
+      const { error } = await supabaseAdmin.from("applications").insert({
+        job_id: jobId,
+        name,
+        email,
+        phone: phone ?? null,
+        cv_url: cvUrl ?? null,
+        message,
+        gdpr_consent: gdprConsent ?? false,
+        status: status ?? "new",
+      });
+
+      if (error) {
+        throw error;
+      }
+
       res.json({ success: true });
     } catch (error) {
-      console.error("Database error:", error);
+      console.error("Supabase error:", error);
       res.status(500).json({ error: "Failed to submit application" });
     }
   });
