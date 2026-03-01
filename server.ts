@@ -12,7 +12,18 @@ dotenv.config();
 async function startServer() {
   const app = express();
   const PORT = Number(process.env.PORT) || 3000;
-
+  console.log('ENV CHECK:', {
+    hasSupabaseUrl: !!process.env.VITE_SUPABASE_URL,
+    hasAnonKey: !!process.env.VITE_SUPABASE_ANON_KEY,
+    hasServiceKey: !!process.env.SUPABASE_SERVICE_KEY,
+  });
+  ```
+  
+  Then commit and push:
+  ```
+  git add .
+  git commit -m "Add env debug log"
+  git push
   // Middleware to parse JSON bodies
   app.use(express.json());
 
