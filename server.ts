@@ -11,12 +11,8 @@ dotenv.config();
 
 async function startServer() {
   const app = express();
-  const PORT = Number(process.env.PORT) || 3000;
-  console.log('ENV CHECK:', {
-    hasSupabaseUrl: !!process.env.VITE_SUPABASE_URL,
-    hasAnonKey: !!process.env.VITE_SUPABASE_ANON_KEY,
-    hasServiceKey: !!process.env.SUPABASE_SERVICE_KEY,
-  });
+  const rawPort = process.env.PORT ?? "3000";
+  const PORT = Number(rawPort);
 
   // Middleware to parse JSON bodies
   app.use(express.json());
@@ -111,9 +107,9 @@ async function startServer() {
   app.get("/api/jobs/:id", async (req, res) => {
     try {
       const jobId = Number(req.params.id);
-      const supabaseAdmin = getSupabaseAdminClient();
+      const supabase = getSupabaseClient();
 
-      const { data, error } = await supabaseAdmin
+      const { data, error } = await supabase
         .from("jobs")
         .select("*")
         .eq("id", jobId)
